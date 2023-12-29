@@ -63,7 +63,6 @@ const io = new Server(server, {
 });
 
 io.on('connection', (socket) => {
-
   socket.on("send_message", (data) => {
     const messaggioConIdUtente = {
       utente: socket.id,
@@ -71,10 +70,12 @@ io.on('connection', (socket) => {
     };
     console.log(messaggioConIdUtente)
 
+    // Invia tutte le informazioni sull'asta, inclusi i messaggi e l'offerta corrente
     socket.broadcast.emit("receive_message", {
       prodotto: data.prodotto,
+      asta: data.asta,
       messaggio: messaggioConIdUtente
-  });
+    });
   });
 });
 

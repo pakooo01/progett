@@ -52,177 +52,184 @@ function CountdownTimer({ dataFine }) {
   );
 }
 
-
 function Asta() {
-  const [isTimerExpired, setIsTimerExpired] = useState(false);
   const [aste, setAste] = useState([]);
   const [inputMessages, setInputMessages] = useState({});
   const [productMessages, setProductMessages] = useState({});
 
-    // RECUPERA I DATI DELL'UTENTE DAL LOCALSTORAGE
-    const user = JSON.parse(localStorage.getItem("chat-app-user"));
+  // RECUPERA I DATI DELL'UTENTE DAL LOCALSTORAGE
+  const user = JSON.parse(localStorage.getItem('chat-app-user'));
 
-    // VERIFICO SE L'UTENTE è LOGGATO E PRENDO IL SUO USER ID
-    const userid = user ? user._id : "Ospite";
+  // VERIFICO SE L'UTENTE è LOGGATO E PRENDO IL SUO USER ID
+  const userid = user ? user._id : 'Ospite';
 
-    console.log(userid)
+  useEffect(() => {
+    // Funzione per caricare i dati delle aste
+    const fetchAste = async () => {
+      try {
+        const response = await fetch(getAllAste);
+        const data = await response.json();
+        setAste(data);
+      } catch (error) {
+        console.error('Errore durante il recupero delle aste:', error);
+      }
+    };
 
-    useEffect(() => {
-      fetch(getAllAste)
-        .then((response) => response.json())
-        .then((data) => {
-          setAste(data);
-    
-          // Stampa gli ID delle aste
-          data.forEach((asta) => {
-            console.log('ID Asta:', asta._id);
-          });
-        })
-        .catch((error) => console.error('Errore durante il recupero delle aste:', error));
-    }, []);
+    // Carica i dati delle aste iniziali
+    fetchAste();
 
-
-      const sendMessage = (astaId,productName, asta) => {
-        console.log(aste)
-        const message = inputMessages[productName];
-      
-        if (!/^\d+(\.\d{1,2})?$/.test(message)) {
-          alert('Devi inserire un importo numerico valido');
-          return;
-        }
-      
-        const puntata = parseFloat(message);
-        const prezzoProdotto = parseFloat(aste.find((p) => p.nomeProdotto === productName)?.prezzoPartenza);
-        const ultimaPuntata = parseFloat(productMessages[productName]?.slice(-1)[0]?.messaggio) || 0;
-      
-        if (puntata <= ultimaPuntata) {
-          alert('Inserisci un importo più elevato');
-          return;
-        }
-      
-        if (puntata < prezzoProdotto) {
-          alert('Punta un importo più alto del prezzo di partenza');
-          return;
-        }
-      
-        socket.emit('send_message', { messaggio: message, prodotto: productName });
-      
-        setProductMessages((prevMessages) => ({
-          ...prevMessages,
-          [productName]: [...(prevMessages[productName] || []), { utente: 'Tu', messaggio: message }],
-        }));
-      
-        setInputMessages({ ...inputMessages, [productName]: '' });
-
-        console.log('ID Asta in aggiornaPrezzo:', astaId);
-        console.log(userid)
-        console.log(puntata)
-        // Chiamata API per aggiornare il prezzo
-        fetch(aggiornaPrezzo(astaId, userid, puntata), {
-          method: 'PUT',
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            console.log('Risposta API:', data);
-          })
-          .catch((error) => {
-            console.error('Errore durante l\'aggiornamento del prezzo:', error);
-          });
-      };
-
-      const handleRedeem = (productName) => {
-        console.log('avviato')
-        const asta = aste.find((a) => a.nomeProdotto === productName);
-      
-        if (!asta) {
-          console.error('Asta non trovata');
-          return;
-        }
-      
-        const ultimaOfferta = asta.offerte.slice(-1)[0];
-      
-        // Controlla se il tempo è scaduto
-        const now = new Date();
-        const isExpired = now >= new Date(asta.dataFine);
-      
-        console.log('Tempo scaduto?', isExpired);
-        console.log('Ultima offerta:', ultimaOfferta);
-        console.log('ID Utente corrente:', userid);
-        
-        if (!isExpired) {
-          alert(`Il tempo non è ancora scaduto per ${productName}`);
-          return;
-        }
-      
-        // Controlla se l'utente corrisponde all'offerente dell'ultima offerta
-        const isCurrentUserOfferer = ultimaOfferta && ultimaOfferta.offerente === userid;
-      
-        console.log('Utente corrisponde all\'offerente?', isCurrentUserOfferer);
-      
-        if (isCurrentUserOfferer) {
-          // Puoi eseguire il riscatto solo se l'utente corrisponde all'offerente dell'ultima offerta
-          // Altre logiche di riscatto...
-          alert(`Riscattato per ${productName}`);
-        } else {
-          alert(`Solo l'offerente dell'ultima offerta può riscattare per ${productName}`);
-        }
-      };
-      
-
-    useEffect(() => {
-      socket.on('receive_message', (data) => {
-        setProductMessages((prevMessages) => ({
-          ...prevMessages,
-          [data.prodotto]: [...(prevMessages[data.prodotto] || []), data.messaggio],
-        }));
+    // Ascolta gli aggiornamenti dal server
+    socket.on('receive_message', (data) => {
+      // Aggiorna lo stato delle aste quando ricevi un nuovo messaggio
+      setAste((prevAste) => {
+        const updatedAste = prevAste.map((asta) =>
+          asta.nomeProdotto === data.prodotto ? { ...asta, ...data.asta } : asta
+        );
+        return updatedAste;
       });
-    }, []);
 
-    return (
-      <div>
-        <form>
-          <input placeholder={`codice asta..`} className='codiceInput' />
-          <button className='codiceButton'>
-            <TbFilterSearch />
-          </button>
-        </form>
-        <div className='App' style={{ display: 'flex', flexDirection: 'row' }}>
-          {aste.map((asta, index) => (
-            <div className='AstaContainer' key={index} style={{ marginRight: '40px' }}>
-              <h2>{asta.nomeProdotto}</h2>
-              <img src={asta.image} alt={`${asta.nomeProdotto} Image`} />
-              <p>
-                <b>Prezzo di partenza:</b> {asta.prezzoPartenza}$
-              </p>
-              <p className='prezzoCorrente'>
-              <b>Prezzo Corrente:</b> {productMessages[asta.nomeProdotto]?.slice(-1)[0]?.utente} -{' '}
-              {asta.offerte.slice(-1)[0]?.importoOfferta || asta.prezzoCorrente}$
+      // Aggiorna lo stato dei messaggi del prodotto
+      setProductMessages((prevMessages) => ({
+        ...prevMessages,
+        [data.prodotto]: [...(prevMessages[data.prodotto] || []), data.messaggio],
+      }));
+    });
+
+    // Pulisce l'ascolto degli aggiornamenti quando il componente viene smontato
+    return () => {
+      socket.off('receive_message');
+    };
+  }, []);
+
+  const sendMessage = (astaId, productName, prezzoCorrente) => {
+    const message = inputMessages[productName];
+
+    if (!/^\d+(\.\d{1,2})?$/.test(message)) {
+      alert('Devi inserire un importo numerico valido');
+      return;
+    }
+
+    const puntata = parseFloat(message);
+    const ultimaPuntata =
+      parseFloat(productMessages[productName]?.slice(-1)[0]?.messaggio) || 0;
+
+    if (puntata <= ultimaPuntata) {
+      alert('Inserisci un importo più elevato');
+      return;
+    }
+
+    socket.emit('send_message', { messaggio: message, prodotto: productName });
+
+    setProductMessages((prevMessages) => ({
+      ...prevMessages,
+      [productName]: [...(prevMessages[productName] || []), { utente: 'Tu', messaggio: message }],
+    }));
+
+    setInputMessages({ ...inputMessages, [productName]: '' });
+
+    console.log('ID Asta in aggiornaPrezzo:', astaId);
+    console.log(userid);
+    console.log(puntata);
+
+    // Chiamata API per aggiornare il prezzo
+    fetch(aggiornaPrezzo(astaId, userid, puntata), {
+      method: 'PUT',
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('Risposta API:', data);
+      })
+      .catch((error) => {
+        console.error('Errore durante l\'aggiornamento del prezzo:', error);
+      });
+  };
+
+  const handleRedeem = (productName) => {
+    console.log('avviato');
+    const asta = aste.find((a) => a.nomeProdotto === productName);
+
+    if (!asta) {
+      console.error('Asta non trovata');
+      return;
+    }
+
+    const ultimaOfferta = asta.offerte.slice(-1)[0];
+
+    // Controlla se il tempo è scaduto
+    const now = new Date();
+    const isExpired = now >= new Date(asta.dataFine);
+
+    console.log('Tempo scaduto?', isExpired);
+    console.log('Ultima offerta:', ultimaOfferta);
+    console.log('ID Utente corrente:', userid);
+
+    if (!isExpired) {
+      alert(`Il tempo non è ancora scaduto per ${productName}`);
+      return;
+    }
+
+    // Controlla se l'utente corrisponde all'offerente dell'ultima offerta
+    const isCurrentUserOfferer = ultimaOfferta && ultimaOfferta.offerente === userid;
+
+    console.log('Utente corrisponde all\'offerente?', isCurrentUserOfferer);
+
+    if (isCurrentUserOfferer) {
+      // Puoi eseguire il riscatto solo se l'utente corrisponde all'offerente dell'ultima offerta
+      // Altre logiche di riscatto...
+      alert(`Riscattato per ${productName}`);
+    } else {
+      alert(`Solo l'offerente dell'ultima offerta può riscattare per ${productName}`);
+    }
+  };
+
+  return (
+    <div>
+      <form>
+        <input placeholder={`codice asta..`} className='codiceInput' />
+        <button className='codiceButton'>
+          <TbFilterSearch />
+        </button>
+      </form>
+      <div className='App' style={{ display: 'flex', flexDirection: 'row' }}>
+        {aste.map((asta, index) => (
+          <div className='AstaContainer' key={index} style={{ marginRight: '40px' }}>
+            <h2>{asta.nomeProdotto}</h2>
+            <img src={asta.image} alt={`${asta.nomeProdotto} Image`} />
+            <p>
+              <b>Prezzo di partenza:</b> {asta.prezzoPartenza}$
             </p>
-              <div className='inputContainer'>
-                <input
-                  placeholder={`La tua puntata...`}
-                  value={inputMessages[asta.nomeProdotto] || ''}
-                  onChange={(e) =>
-                    setInputMessages((prevInputMessages) => ({
-                      ...prevInputMessages,
-                      [asta.nomeProdotto]: e.target.value,
-                    }))
-                  }
-                />
-                <button className='bottone' onClick={() => sendMessage(asta._id,asta.nomeProdotto, asta.prezzoCorrente)}>
-                  <FaMoneyBillTransfer className='paga' />
-                </button>
-              </div>
-              <CountdownTimer dataFine={new Date(asta.dataFine)} /> {/* Usa CountdownTimer */}
-              <button onClick={() => handleRedeem(asta.nomeProdotto)}>
+            <p className='prezzoCorrente'>
+              <b>Prezzo Corrente:</b>{' '}
+              {productMessages[asta.nomeProdotto]?.slice(-1)[0]?.messaggio || asta.prezzoCorrente}$
+            </p>
+            <div className='inputContainer'>
+              <input
+                placeholder={`La tua puntata...`}
+                value={inputMessages[asta.nomeProdotto] || ''}
+                onChange={(e) =>
+                  setInputMessages((prevInputMessages) => ({
+                    ...prevInputMessages,
+                    [asta.nomeProdotto]: e.target.value,
+                  }))
+                }
+              />
+              <button
+                className='bottone'
+                onClick={() => sendMessage(asta._id, asta.nomeProdotto, asta.prezzoCorrente)}
+              >
+                <FaMoneyBillTransfer className='paga' />
+              </button>
+            </div>
+            <CountdownTimer dataFine={new Date(asta.dataFine)} />
+            <button onClick={() => handleRedeem(asta.nomeProdotto)}>
               Riscatta
             </button>
-              <div></div>
-            </div>
-          ))}
-        </div>
+            <div></div>
+          </div>
+        ))}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
 export default Asta;
